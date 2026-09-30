@@ -37,7 +37,7 @@ void chooseMode() {
     // through the ESP_RST_DEEPSLEEP branch below.
     beginNativeDisplay();
     playShutdownChime();
-    PowerManager::deepSleepUntilPowerButton();
+    freeink::PowerManager::deepSleepUntilPowerButton();
   }
   if (takePendingFlag("pendingReader")) {
     // Set by the menu when the user picks Reader; read back here on the
