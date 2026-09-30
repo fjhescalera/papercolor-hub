@@ -10,8 +10,10 @@ In Sudoku, A/C selects the previous/next editable cell and B cycles its digit.
 Hold B to clear a cell or hold A to reset the puzzle. Conflicts are shown in
 red and progress is saved automatically.
 
-Hold button C while powering on to select the next mode. Copy the
-`examples/sd-card` layout to the microSD card:
+On boot, a menu lists all five modes. Press A or C to move the highlight and
+B to confirm. The menu remembers your last choice and pre-highlights it next
+time. Waking the reader from its own sleep screen skips the menu and resumes
+reading directly. Copy the `examples/sd-card` layout to the microSD card:
 
 - `/config/stocks.json`: Wi-Fi, refresh interval, and symbols. Prefix OTC
   symbols with `otc_`.
@@ -24,5 +26,5 @@ files from [Releases](../../releases), then follow the
 [installation guide](INSTALL.en.md).
 
 To build your own firmware, fork this repository and run **Build PaperColor
-firmware** from GitHub **Actions**. Download its Artifact when complete. Pushing
+firmware** from GitHub **Actions**. When it completes, download its Artifact. Pushing
 a `v*` tag automatically creates a Release with the `.bin` files attached.

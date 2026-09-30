@@ -10,6 +10,8 @@
 
 #include <Arduino.h>
 #include <ctype.h>
+#include <Preferences.h>
+#include <esp_system.h>
 #include <BatteryMonitor.h>
 #include <BoardConfig.h>
 #include <EInkDisplay.h>
@@ -2606,7 +2608,17 @@ void showSleepScreenAndPowerOff() {
     delay(10);
   }
   delay(150);
-  PowerManager::deepSleepUntilPowerButton();
+  // The shutdown chime needs M5Unified's Speaker (M5.begin()), which this
+  // process never calls — Reader drives the panel directly via
+  // Ed2208M5Driver and the two must not share a process (see main.cpp's
+  // chooseMode()/native_display.cpp's reassertDisplayPowerRail() comments).
+  // Restart into a fresh, menu-free boot that plays the chime and then
+  // deep-sleeps itself, same hand-off pattern used to enter Reader.
+  Preferences prefs;
+  prefs.begin("papercolor", false);
+  prefs.putBool("pendingShutdown", true);
+  prefs.end();
+  esp_restart();
 }
 
 void scrollSettingsByRow(int8_t dir);

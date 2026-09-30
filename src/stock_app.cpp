@@ -99,7 +99,7 @@ void render() {
     M5.Display.setTextDatum(middle_center);
     M5.Display.drawString("No quote data", 300, 210);
   }
-  nativeFooter("Hold button C while booting to switch mode");
+  nativeFooter("B refresh now");
   M5.Display.endWrite();
 }
 }
