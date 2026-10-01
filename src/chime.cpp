@@ -87,6 +87,19 @@ void playBootChime() {
     return;
   }
   const size_t len = f.size();
+  // This buffer is deliberately never freed (see below), so it is held for
+  // the rest of this boot — on every app except Reader (which restarts into
+  // a fresh process), that is the whole session. Cap it well above the real
+  // asset (~320KB) but far below PSRAM, so a user dropping an oversized file
+  // in /chimes/ falls back to a beep instead of permanently starving
+  // whatever runs afterward.
+  constexpr size_t kMaxChimeBytes = 2 * 1024 * 1024;
+  if (len == 0 || len > kMaxChimeBytes) {
+    Serial.printf("[diag] chime: file size %u out of bounds\n", static_cast<unsigned>(len));
+    f.close();
+    playFallbackBootBeep();
+    return;
+  }
   uint8_t* buf = psAlloc(len);
   WavPcm pcm;
   const bool ok = buf != nullptr && f.read(buf, len) == len && parseWavPcm(buf, len, &pcm);
