@@ -40,10 +40,13 @@ void drawRow(uint8_t index, bool highlighted) {
 // what makes nav fast; the full nativeHeader/nativeFooter paint happens
 // once, on entry, at epd_quality.
 void moveHighlight(uint8_t from, uint8_t to) {
+  const uint32_t start = millis();
   M5.Display.startWrite();
   drawRow(from, false);
   drawRow(to, true);
   M5.Display.endWrite();
+  Serial.printf("[diag] moveHighlight epdMode=%d took=%lums\n",
+                static_cast<int>(M5.Display.getEpdMode()), millis() - start);
 }
 }  // namespace
 
@@ -61,10 +64,15 @@ AppMode runModeMenu() {
   nativeFooter("A prev   B next   C select");
   M5.Display.endWrite();
 
-  // Fast, black-and-white mode for the rest of navigation: epd_text is the
-  // panel's text-oriented LUT (built for exactly this kind of quick partial
-  // update), not the slower color/grayscale epd_quality mode used above.
-  M5.Display.setEpdMode(epd_mode_t::epd_text);
+  // For this panel (ED2208), epd_mode only changes the dithering math in
+  // Panel_ED2208::_exec_transfer() -- the actual physical refresh sequence
+  // in _turn_on_display() (POWER_ON / DISPLAY_REFRESH / POWER_OFF, each
+  // waiting on the panel's own busy pin) is identical regardless of mode.
+  // epd_fast's simpler dithering is a little cheaper to compute than
+  // epd_text's, but neither changes the dominant cost: the panel's own
+  // fixed refresh time. True fast partial refresh on this panel only
+  // exists in the separate driver Reader uses, not here.
+  M5.Display.setEpdMode(epd_mode_t::epd_fast);
 
   for (;;) {
     M5.update();

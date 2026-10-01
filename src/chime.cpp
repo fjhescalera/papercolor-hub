@@ -76,11 +76,13 @@ void playBootChime() {
   // flag, not esp_reset_reason(), gates the silent-resume path), so no
   // reset-reason check is needed here.
   if (!beginSharedSd()) {
+    Serial.println("[diag] chime: beginSharedSd failed");
     playFallbackBootBeep();
     return;
   }
   File f = SD.open(kChimePath, FILE_READ);
   if (!f) {
+    Serial.println("[diag] chime: SD.open failed");
     playFallbackBootBeep();
     return;
   }
@@ -90,6 +92,7 @@ void playBootChime() {
   const bool ok = buf != nullptr && f.read(buf, len) == len && parseWavPcm(buf, len, &pcm);
   f.close();
   if (!ok) {
+    Serial.printf("[diag] chime: parse failed (buf=%p len=%u)\n", buf, static_cast<unsigned>(len));
     if (buf != nullptr) free(buf);
     playFallbackBootBeep();
     return;
@@ -98,11 +101,14 @@ void playBootChime() {
   // — played once per boot, a few hundred KB against 8MB PSRAM; add tracked
   // free() if this ever needs to play more than once per runtime.
   const bool stereo = pcm.channels == 2;
+  bool queued;
   if (pcm.bitsPerSample == 16) {
-    M5.Speaker.playRaw(reinterpret_cast<const int16_t*>(pcm.data), pcm.len / 2, pcm.sampleRate, stereo);
+    queued = M5.Speaker.playRaw(reinterpret_cast<const int16_t*>(pcm.data), pcm.len / 2, pcm.sampleRate, stereo);
   } else {
-    M5.Speaker.playRaw(pcm.data, pcm.len, pcm.sampleRate, stereo);
+    queued = M5.Speaker.playRaw(pcm.data, pcm.len, pcm.sampleRate, stereo);
   }
+  Serial.printf("[diag] chime: playRaw queued=%d rate=%u ch=%u bits=%u len=%u\n", queued, pcm.sampleRate,
+                pcm.channels, pcm.bitsPerSample, static_cast<unsigned>(pcm.len));
 }
 
 void playShutdownChime() {

@@ -33,7 +33,8 @@ bool beginNativeDisplay() {
   // M5.begin() only configures the speaker's pins and enable callback; it
   // never starts the I2S peripheral itself. Without this explicit begin(),
   // tone()/playWav() silently do nothing.
-  M5.Speaker.begin();
+  const bool speakerBegan = M5.Speaker.begin();
+  Serial.printf("[diag] board=%d speakerBegan=%d\n", static_cast<int>(M5.getBoard()), speakerBegan);
   M5.Display.setRotation(1);
   M5.Display.setEpdMode(epd_mode_t::epd_quality);
   M5.Display.fillScreen(WHITE);

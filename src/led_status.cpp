@@ -57,7 +57,15 @@ void IRAM_ATTR sendFrame(const uint8_t* bytes, uint32_t len, uint32_t t0h, uint3
 void setLedRail(bool on) {
   using namespace freeink::m5pm1;
   const uint8_t desired = static_cast<uint8_t>(CHG_EN | DCDC_EN | BOOST_EN | (on ? LDO_EN : 0));
-  M5.In_I2C.writeRegister8(ADDR, REG_PWR_CFG, desired, I2C_HZ);
+  const bool wrote = M5.In_I2C.writeRegister8(ADDR, REG_PWR_CFG, desired, I2C_HZ);
+  // Defensively re-evict the PM1's own autonomous NeoPixel engine: if it is
+  // still driving GPIO21 itself (e.g. boot-time disableLeds() didn't stick),
+  // its output would contend with our own bit-bang on the same wire, which
+  // could plausibly explain an unexpected color.
+  const bool wroteNeo = M5.In_I2C.writeRegister8(ADDR, REG_NEO_CFG, 0x00, I2C_HZ);
+  const uint8_t readBack = M5.In_I2C.readRegister8(ADDR, REG_PWR_CFG, I2C_HZ);
+  Serial.printf("[diag] led: setRail(%d) wrote=%d wroteNeo=%d desired=0x%02x readBack=0x%02x\n", on, wrote,
+                wroteNeo, desired, readBack);
 }
 
 void showColor(uint8_t r, uint8_t g, uint8_t b) {
