@@ -1,5 +1,7 @@
 #include "chime.h"
 
+#include <cstring>
+
 #include "native_display.h"
 
 namespace {
@@ -19,6 +21,31 @@ void playFallbackBootBeep() {
   beep(880, 80);
   beep(1320, 120);
 }
+
+// M5Unified's playWav() trusts the chunk sizes inside the file and reads
+// past the buffer on a truncated or corrupt one, which can crash the boot.
+// An SD card asset is untrusted input, so walk and bounds-check every chunk
+// against the actual buffer length before ever handing it to playWav().
+bool isValidWav(const uint8_t* buf, size_t len) {
+  if (buf == nullptr || len < 44) return false;
+  if (memcmp(buf, "RIFF", 4) != 0 || memcmp(buf + 8, "WAVE", 4) != 0) return false;
+
+  size_t offset = 12;
+  bool haveFmt = false;
+  bool haveData = false;
+  while (offset + 8 <= len) {
+    uint32_t chunkSize;
+    memcpy(&chunkSize, buf + offset + 4, 4);
+    const size_t chunkStart = offset + 8;
+    if (chunkSize > len - chunkStart) return false;  // chunk claims to run past the buffer
+    if (memcmp(buf + offset, "fmt ", 4) == 0 && chunkSize >= 16) haveFmt = true;
+    if (memcmp(buf + offset, "data", 4) == 0) haveData = true;
+    const size_t advance = chunkSize + (chunkSize & 1);  // chunks are word-aligned
+    if (advance > len - chunkStart) return false;
+    offset = chunkStart + advance;
+  }
+  return haveFmt && haveData;
+}
 }  // namespace
 
 void playBootChime() {
@@ -36,7 +63,7 @@ void playBootChime() {
   }
   const size_t len = f.size();
   uint8_t* buf = psAlloc(len);
-  const bool ok = buf != nullptr && f.read(buf, len) == len;
+  const bool ok = buf != nullptr && f.read(buf, len) == len && isValidWav(buf, len);
   f.close();
   if (!ok) {
     if (buf != nullptr) free(buf);
