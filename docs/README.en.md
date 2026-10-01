@@ -10,8 +10,8 @@ In Sudoku, A/C selects the previous/next editable cell and B cycles its digit.
 Hold B to clear a cell or hold A to reset the puzzle. Conflicts are shown in
 red and progress is saved automatically.
 
-On boot, a menu lists all five modes. Press A or C to move the highlight and
-B to confirm. The menu remembers your last choice and pre-highlights it next
+On boot, a menu lists all five modes. Press A or B to move the highlight and
+C to confirm. The menu remembers your last choice and pre-highlights it next
 time. Waking the reader from its own sleep screen skips the menu and resumes
 reading directly. Copy the `examples/sd-card` layout to the microSD card:
 

@@ -30,6 +30,10 @@ bool beginNativeDisplay() {
   cfg.clear_display = false;
   cfg.fallback_board = m5::board_t::board_M5PaperColor;
   M5.begin(cfg);
+  // M5.begin() only configures the speaker's pins and enable callback; it
+  // never starts the I2S peripheral itself. Without this explicit begin(),
+  // tone()/playWav() silently do nothing.
+  M5.Speaker.begin();
   M5.Display.setRotation(1);
   M5.Display.setEpdMode(epd_mode_t::epd_quality);
   M5.Display.fillScreen(WHITE);

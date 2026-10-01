@@ -2,18 +2,19 @@
 
 #include <Preferences.h>
 
-#include "i18n.h"
 #include "native_display.h"
 
 namespace {
 constexpr AppMode kOrder[kAppModeCount] = {
     AppMode::Stocks, AppMode::Reader, AppMode::Calendar, AppMode::PhotoFrame, AppMode::Sudoku,
 };
-// Explicit table rather than casting AppMode <-> TextId: the two enums
-// currently share ordinal order by coincidence, and a cast would silently
-// break if either is reordered independently later.
-constexpr TextId kLabelFor[kAppModeCount] = {
-    TextId::Stocks, TextId::Reader, TextId::Calendar, TextId::PhotoFrame, TextId::Sudoku,
+// Plain ASCII labels, matching every other screen in this codebase (e.g.
+// stock_app.cpp's "TW STOCK WATCHLIST"): the i18n TextId/tr() strings are
+// Traditional Chinese by default locale, and the fonts used here and
+// everywhere else in the app (FreeSansBold12pt7b etc.) have no CJK glyphs,
+// which rendered as blank boxes.
+constexpr const char* kLabelFor[kAppModeCount] = {
+    "Stocks", "Reader", "Calendar", "Photo Frame", "Sudoku",
 };
 
 constexpr int kRowX = 40;
@@ -24,26 +25,24 @@ constexpr int kFirstRowY = 64;
 
 int rowY(uint8_t index) { return kFirstRowY + index * (kRowHeight + kRowGap); }
 
-void drawRow(uint8_t index, bool highlighted, Locale locale) {
+void drawRow(uint8_t index, bool highlighted) {
   const uint32_t bg = highlighted ? BLACK : WHITE;
   const uint32_t fg = highlighted ? WHITE : BLACK;
   M5.Display.fillRect(kRowX, rowY(index), kRowWidth, kRowHeight, bg);
   M5.Display.setTextColor(fg, bg);
   M5.Display.setTextDatum(middle_left);
   M5.Display.setFont(&fonts::FreeSansBold12pt7b);
-  M5.Display.drawString(tr(kLabelFor[index], locale), kRowX + 20, rowY(index) + kRowHeight / 2);
+  M5.Display.drawString(kLabelFor[index], kRowX + 20, rowY(index) + kRowHeight / 2);
 }
 
-// Full repaint, same startWrite/fillScreen/.../endWrite shape every other
-// app in this codebase uses (see stock_app.cpp/sudoku_app.cpp render()) —
-// epd_fast (set by the caller during navigation) makes this fast enough to
-// redo on every keypress without a hand-rolled partial-redraw path.
-void renderMenu(uint8_t cursor, Locale locale) {
+// Only the two rows that actually changed, in one SPI transaction, so the
+// panel refreshes just that strip instead of the whole screen — this is
+// what makes nav fast; the full nativeHeader/nativeFooter paint happens
+// once, on entry, at epd_quality.
+void moveHighlight(uint8_t from, uint8_t to) {
   M5.Display.startWrite();
-  M5.Display.fillScreen(WHITE);
-  nativeHeader("SELECT MODE");
-  for (uint8_t i = 0; i < kAppModeCount; ++i) drawRow(i, i == cursor, locale);
-  nativeFooter("A prev   C next   B select");
+  drawRow(from, false);
+  drawRow(to, true);
   M5.Display.endWrite();
 }
 }  // namespace
@@ -54,20 +53,30 @@ AppMode runModeMenu() {
   uint8_t cursor = prefs.getUChar("mode", 0) % kAppModeCount;
   prefs.end();
 
-  const Locale locale = detectLocale();
   M5.Display.setEpdMode(epd_mode_t::epd_quality);
-  renderMenu(cursor, locale);
-  M5.Display.setEpdMode(epd_mode_t::epd_fast);
+  M5.Display.startWrite();
+  M5.Display.fillScreen(WHITE);
+  nativeHeader("SELECT MODE");
+  for (uint8_t i = 0; i < kAppModeCount; ++i) drawRow(i, i == cursor);
+  nativeFooter("A prev   B next   C select");
+  M5.Display.endWrite();
+
+  // Fast, black-and-white mode for the rest of navigation: epd_text is the
+  // panel's text-oriented LUT (built for exactly this kind of quick partial
+  // update), not the slower color/grayscale epd_quality mode used above.
+  M5.Display.setEpdMode(epd_mode_t::epd_text);
 
   for (;;) {
     M5.update();
     if (M5.BtnA.wasReleased()) {
-      cursor = static_cast<uint8_t>((cursor + kAppModeCount - 1) % kAppModeCount);
-      renderMenu(cursor, locale);
-    } else if (M5.BtnC.wasReleased()) {
-      cursor = static_cast<uint8_t>((cursor + 1) % kAppModeCount);
-      renderMenu(cursor, locale);
+      const uint8_t next = static_cast<uint8_t>((cursor + kAppModeCount - 1) % kAppModeCount);
+      moveHighlight(cursor, next);
+      cursor = next;
     } else if (M5.BtnB.wasReleased()) {
+      const uint8_t next = static_cast<uint8_t>((cursor + 1) % kAppModeCount);
+      moveHighlight(cursor, next);
+      cursor = next;
+    } else if (M5.BtnC.wasReleased()) {
       prefs.begin("papercolor", false);
       prefs.putUChar("mode", cursor);
       prefs.end();
