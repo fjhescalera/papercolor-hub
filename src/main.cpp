@@ -7,6 +7,7 @@
 #include "app_mode.h"
 #include "apps.h"
 #include "chime.h"
+#include "led_status.h"
 #include "mode_menu.h"
 #include "native_display.h"
 
@@ -46,6 +47,7 @@ void chooseMode() {
     prefs.end();
     beginNativeDisplay();
     playShutdownChime();
+    ledStatusFlashShutdown();
     freeink::PowerManager::deepSleepUntilPowerButton();
   }
   if (takePendingFlag("pendingReader")) {
@@ -77,6 +79,7 @@ void chooseMode() {
   }
   beginNativeDisplay();
   playBootChime();
+  ledStatusFlashBoot();
   mode = runModeMenu();
   if (mode == AppMode::Reader) {
     Preferences prefs;
