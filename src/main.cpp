@@ -33,8 +33,16 @@ void chooseMode() {
   if (takePendingFlag("pendingShutdown")) {
     // Reader asked for the chime + sleep hand-off (see reader_app.cpp's
     // showSleepScreenAndPowerOff()): play it here, where M5Unified can be
-    // safely brought up, then deep-sleep. Never returns; the next wake goes
-    // through the ESP_RST_DEEPSLEEP branch below.
+    // safely brought up, then deep-sleep. Never returns; the next wake is
+    // detected via "pendingWake" below, not esp_reset_reason() — on this
+    // board a plain reset (button or esptool's RTS toggle) does not fully
+    // clear RTC-domain state, so esp_reset_reason() can keep reporting
+    // ESP_RST_DEEPSLEEP on every later boot even without a real sleep/wake
+    // cycle, which silently skipped the menu and chime on every reset.
+    Preferences prefs;
+    prefs.begin("papercolor", false);
+    prefs.putBool("pendingWake", true);
+    prefs.end();
     beginNativeDisplay();
     playShutdownChime();
     freeink::PowerManager::deepSleepUntilPowerButton();
@@ -50,7 +58,7 @@ void chooseMode() {
     mode = AppMode::Reader;
     return;
   }
-  if (esp_reset_reason() == ESP_RST_DEEPSLEEP) {
+  if (takePendingFlag("pendingWake")) {
     // Waking Reader's own sleep screen: resume instantly, no menu, no chime.
     mode = persistedMode();
     return;

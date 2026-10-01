@@ -1,7 +1,5 @@
 #include "chime.h"
 
-#include <esp_system.h>
-
 #include "native_display.h"
 
 namespace {
@@ -24,8 +22,9 @@ void playFallbackBootBeep() {
 }  // namespace
 
 void playBootChime() {
-  if (esp_reset_reason() == ESP_RST_DEEPSLEEP) return;  // silent resume, not a fresh boot
-
+  // main.cpp only calls this on a genuine cold boot (its own "pendingWake"
+  // flag, not esp_reset_reason(), gates the silent-resume path), so no
+  // reset-reason check is needed here.
   if (!beginSharedSd()) {
     playFallbackBootBeep();
     return;
