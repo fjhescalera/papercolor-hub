@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <Preferences.h>
 #include <esp_system.h>
+#include <M5Pm1.h>
 #include <PowerManager.h>
 
 #include "app_mode.h"
@@ -51,17 +52,28 @@ void chooseMode() {
     // Set by the menu when the user picks Reader; read back here on the
     // very next boot, before any M5Unified/menu/chime code runs. Reader
     // drives the panel directly via freeink-sdk's Ed2208M5Driver, which
-    // must not share a process with M5Unified's own display/I2C init (see
-    // native_display.cpp's reassertDisplayPowerRail() comment for the I2C
-    // half of this) — a quick software restart gives it the same pristine
-    // hardware state it has today.
+    // must not share a process with M5Unified's own display/I2C init — a
+    // quick software restart gives it the same pristine hardware state it
+    // has today.
     mode = AppMode::Reader;
     return;
   }
   if (takePendingFlag("pendingWake")) {
-    // Waking Reader's own sleep screen: resume instantly, no menu, no chime.
-    mode = persistedMode();
-    return;
+    // Confirm this against the PMIC's own latched wake-source register
+    // rather than trusting the flag alone: Preferences survives an
+    // interrupted shutdown handoff or a reflash, and a stale flag with no
+    // real wake behind it would otherwise skip the menu and chime forever.
+    freeink::m5pm1::beginBus();
+    uint8_t wakeSource = 0;
+    const bool gotWakeSource = freeink::m5pm1::readWakeSource(&wakeSource);
+    freeink::m5pm1::clearWakeSource();
+    if (gotWakeSource && (wakeSource & freeink::m5pm1::WAKE_PWR_BUTTON)) {
+      // Waking Reader's own sleep screen: resume instantly, no menu, no chime.
+      mode = persistedMode();
+      return;
+    }
+    // Flag was stale with no matching wake event — fall through to the
+    // normal cold-boot path below instead of staying silently stuck.
   }
   beginNativeDisplay();
   playBootChime();

@@ -8,30 +8,28 @@ constexpr int kSdMiso = 14;
 constexpr int kSdMosi = 13;
 constexpr int kSdCs = 47;
 bool sdReady = false;
-
-// PWR_CFG auto-clears to 0 on every esptool download-mode entry (and on a
-// PMIC-issued reset/shutdown), which turns off DCDC_EN — the display's 5V
-// rail — until something reasserts it. The Reader app's own driver does
-// this via freeink-sdk's applyBootPowerPolicy(), but that function also
-// calls Wire.begin() on the PM1's bus, which would start a second, competing
-// I2C controller here (M5Unified's In_I2C already owns the same SDA/SCL
-// pins on this board). Reissue just the two register writes through
-// M5.In_I2C instead, so there is only ever one I2C controller on that bus.
-void reassertDisplayPowerRail() {
-  using namespace freeink::m5pm1;
-  const uint8_t current = M5.In_I2C.readRegister8(ADDR, REG_PWR_CFG, I2C_HZ);
-  const uint8_t updated = static_cast<uint8_t>((current & ~LDO_EN) | CHG_EN | DCDC_EN | BOOST_EN);
-  M5.In_I2C.writeRegister8(ADDR, REG_PWR_CFG, updated, I2C_HZ);
-  M5.In_I2C.writeRegister8(ADDR, REG_NEO_CFG, 0x00, I2C_HZ);
-}
 }
 
 bool beginNativeDisplay() {
+  // PWR_CFG auto-clears to 0 on every esptool download-mode entry (and on a
+  // PMIC-issued reset/shutdown), which turns off DCDC_EN — the display's
+  // 5V rail. M5.begin() probes and initializes the EPD panel as part of
+  // its own startup, so the rail must already be back on *before* that
+  // call: reasserting it afterward (as an earlier version of this function
+  // did, via M5.In_I2C) was too late — the panel could be probed/reset
+  // while unpowered and nothing re-runs that init once power returns,
+  // leaving the screen blank for the rest of the boot. Use the SDK's own
+  // raw-Wire helpers here, since M5Unified's In_I2C is not configured yet
+  // at this point in boot — this is a one-shot, sequential use of the bus
+  // before M5Unified claims it, not a second concurrent owner.
+  freeink::m5pm1::beginBus();
+  freeink::m5pm1::applyBootPowerPolicy();
+  delay(50);  // let the 5V rail settle before the panel is probed
+
   auto cfg = M5.config();
   cfg.clear_display = false;
   cfg.fallback_board = m5::board_t::board_M5PaperColor;
   M5.begin(cfg);
-  reassertDisplayPowerRail();
   M5.Display.setRotation(1);
   M5.Display.setEpdMode(epd_mode_t::epd_quality);
   M5.Display.fillScreen(WHITE);
