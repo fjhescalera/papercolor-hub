@@ -46,11 +46,18 @@ void IRAM_ATTR sendFrame(const uint8_t* bytes, uint32_t len, uint32_t t0h, uint3
   }
 }
 
+// A read-modify-write here is unsafe: M5.In_I2C.readRegister8() returns 0 on
+// a failed transaction with no way to detect that from this call, and
+// writing that back would clear DCDC_EN (the display's 5V rail) along with
+// CHG_EN/BOOST_EN. This firmware is PWR_CFG's only writer after boot (see
+// beginNativeDisplay()'s own policy write), so the other bits' correct
+// values are already known here — write the complete desired byte directly
+// instead of reading current state at all. A failed write then just leaves
+// the already-correct prior value in place, never a corrupted one.
 void setLedRail(bool on) {
   using namespace freeink::m5pm1;
-  const uint8_t current = M5.In_I2C.readRegister8(ADDR, REG_PWR_CFG, I2C_HZ);
-  const uint8_t updated = static_cast<uint8_t>(on ? (current | LDO_EN) : (current & ~LDO_EN));
-  M5.In_I2C.writeRegister8(ADDR, REG_PWR_CFG, updated, I2C_HZ);
+  const uint8_t desired = static_cast<uint8_t>(CHG_EN | DCDC_EN | BOOST_EN | (on ? LDO_EN : 0));
+  M5.In_I2C.writeRegister8(ADDR, REG_PWR_CFG, desired, I2C_HZ);
 }
 
 void showColor(uint8_t r, uint8_t g, uint8_t b) {
