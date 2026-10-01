@@ -4,6 +4,7 @@
 #include <M5Pm1.h>
 #include <M5Unified.h>
 #include <esp_cpu.h>
+#include <soc/gpio_struct.h>
 
 // M5Stack PaperColor: two WS2812/SK6812-compatible GRB LEDs on GPIO21,
 // powered through the M5PM1's RGB LED rail (PWR_CFG's LDO_EN bit — the same
@@ -33,14 +34,22 @@ inline void IRAM_ATTR waitUntilCycle(uint32_t target) {
   }
 }
 
+// digitalWrite() goes through pin validation and mode checks on every call —
+// overhead that is negligible for ordinary GPIO use but large relative to
+// WS2812's sub-microsecond pulse widths (300-900ns), easily distorting every
+// bit. Direct register writes, same as the SDK's own LedManager, are the
+// only way to hit this timing reliably.
+inline void IRAM_ATTR gpioHigh(uint8_t pin) { GPIO.out_w1ts = 1UL << pin; }
+inline void IRAM_ATTR gpioLow(uint8_t pin) { GPIO.out_w1tc = 1UL << pin; }
+
 void IRAM_ATTR sendFrame(const uint8_t* bytes, uint32_t len, uint32_t t0h, uint32_t t1h, uint32_t bit) {
   for (uint32_t i = 0; i < len; ++i) {
     const uint8_t value = bytes[i];
     for (uint8_t m = 0x80; m != 0; m >>= 1) {
       const uint32_t start = esp_cpu_get_cycle_count();
-      digitalWrite(kLedPin, HIGH);
+      gpioHigh(kLedPin);
       waitUntilCycle(start + ((value & m) ? t1h : t0h));
-      digitalWrite(kLedPin, LOW);
+      gpioLow(kLedPin);
       waitUntilCycle(start + bit);
     }
   }
